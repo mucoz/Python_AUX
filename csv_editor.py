@@ -1,6 +1,6 @@
 import os.path
 import csv
-from collections import Counter
+from dataclasses import is_dataclass, asdict
 
 
 class CSVEditor:
@@ -32,31 +32,51 @@ class CSVEditor:
     def add_rows(self, data):
         if self.file_path is None:
             raise FileNotFoundError("File path is not set.")
+        headers = self.get_headers()
+        if not headers:
+            raise KeyError("Keys not found.")
+        if is_dataclass(data):
+            data = asdict(data)
         if type(data) == list:
             contains_sublist = any(isinstance(item, list) for item in data)
             contains_subdict = any(isinstance(item, dict) for item in data)
+            contains_dataclass = any(is_dataclass(item) for item in data)
             with open(self.file_path, "a", newline='') as file:
                 if contains_sublist:
                     csv_writer = csv.writer(file)
                     for each_list in data:
                         csv_writer.writerow(each_list)
                 elif contains_subdict:
-                    fieldnames = data.keys()
-                    csv_writer = csv.DictWriter(file, fieldnames)
+                    csv_writer = csv.DictWriter(file, headers)
                     for each_dict in data:
                         csv_writer.writerow(each_dict)
+                elif contains_dataclass:
+                    csv_writer = csv.DictWriter(file, headers)
+                    for each_dataclass in data:
+                        csv_writer.writerow(asdict(each_dataclass))
                 else:
                     csv_writer = csv.writer(file)
                     csv_writer.writerow(data)
                 file.close()
         elif type(data) == dict:
-            if Counter(list(data.keys())) != Counter(self.get_headers()):
-                raise KeyError("Keys are not compatible.")
+            verified_data = {}
+            for key in data.keys():
+                if key not in headers:
+                    raise KeyError("Keys are not compatible.")
+            for header in headers:
+                try:
+                    verified_data[header] = data[header]
+                except KeyError:
+                    verified_data[header] = ""
+            # if Counter(list(data.keys())) != Counter(self.get_headers()):
+            #     raise KeyError("Keys are not compatible.")
             with open(self.file_path, "a", newline='') as file:
-                fieldnames = data.keys()
-                csv_writer = csv.DictWriter(file, fieldnames)
+                # fieldnames = data.keys()
+                csv_writer = csv.DictWriter(file, headers)
                 csv_writer.writerow(data)
                 file.close()
+
+
 
     def get_headers(self):
         """Needs to return list"""
@@ -71,14 +91,20 @@ class CSVEditor:
             file.close()
         return data
 
-    def read_all(self):
+    def read_all(self, include_headers=True):
         """Needs to return list"""
         data = []
+        line = 0
         with open(self.file_path, mode='r', newline='') as file:
             csv_reader = csv.reader(file)
             for row in csv_reader:
                 if row:
-                    data.append(row)
+                    if include_headers==False:
+                        if line > 0:
+                            data.append(row)
+                        line += 1
+                    else:
+                        data.append(row)
             file.close()
         return data
 
@@ -171,4 +197,4 @@ class CSVEditor:
             # Write rows to keep
             csv_writer.writerows(new_rows)
             file.close()
-  
+        
