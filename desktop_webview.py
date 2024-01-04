@@ -1,7 +1,7 @@
 import webview
 import threading
 import sys
-import app from app # app in app.py module
+from app import app # app in app.py module
 
 
 if __name__ == '__main__':
