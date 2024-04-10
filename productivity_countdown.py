@@ -3,13 +3,13 @@ import time
 import datetime
 from threading import Thread
 
+
 WINDOW_WIDTH = 200
 WINDOW_HEIGHT = 150
 
 # window
 window = tk. Tk()
 window.title("Count Down")
-window.iconbitmap("xpsp2res.dll_14_6105_1025.ico")
 screen_width = window.winfo_screenwidth()
 screen_height = window.winfo_screenheight()
 x_cordinate = int(screen_width - WINDOW_WIDTH)
@@ -18,6 +18,7 @@ window.geometry('{}x{}+{}+{}'.format(WINDOW_WIDTH, WINDOW_HEIGHT, x_cordinate, y
 window.resizable(False, False)
 window.minsize(WINDOW_WIDTH, WINDOW_HEIGHT)
 window.attributes("-topmost", True)
+window.overrideredirect(True)
 
 
 class AppState:
@@ -25,13 +26,18 @@ class AppState:
     timer_thread = None
     reset_thread = None
     animation_thread = None
-
+    drag_start_x = None
+    drag_start_y = None
 
 # functions
 def countdown():
-    h = int(text_hour.get())
-    m = int(text_minute.get())
-    s = int(text_second.get())
+    try:
+        h = int(text_hour.get())
+        m = int(text_minute.get())
+        s = int(text_second.get())
+    except ValueError:
+        reset_timer()
+        return
     total_seconds = h * 3600 + m * 60 + s
     if total_seconds == 0:
         reset_timer()
@@ -110,12 +116,33 @@ def reset_timer():
     label_info.configure(text="Ready.")
 
 
+def close_app(event):
+    window.destroy()
+
+
 def toggle_always_on_top():
     if checkbox_ontop_value.get() == 1:
         window.attributes("-topmost", True)
     else:
         window.attributes("-topmost", False)
 
+
+def start_move(event):
+    AppState.drag_start_x = event.x
+    AppState.drag_start_y = event.y
+
+
+def stop_move(event):
+    AppState.drag_start_x = None
+    AppState.drag_start_y = None
+
+
+def on_move(event):
+    dx = event.x - AppState.drag_start_x
+    dy = event.y - AppState.drag_start_y
+    x = window.winfo_x() + dx
+    y = window.winfo_y() + dy
+    window.geometry(f"+{x}+{y}")
 
 # fonts and colors
 main_font = ('SimSun', 12)
@@ -154,11 +181,20 @@ button_reset.grid(row=0, column=1, padx=5, pady=10)
 
 # always on top checkbox
 checkbox_ontop_value = tk.IntVar()
-checkbox_ontop = tk.Checkbutton(frame_settings, text='Always On Top', variable=checkbox_ontop_value,
+checkbox_ontop = tk.Checkbutton(frame_settings, text='On Top', variable=checkbox_ontop_value,
                                 command=toggle_always_on_top, bg=black, fg=orange)
 checkbox_ontop.select()
-checkbox_ontop.grid(row=0, column=0)
+checkbox_ontop.grid(row=0, column=0, padx=25)
+label_close = tk.Label(frame_settings, text="Close", bg=black, fg=orange)
+label_close.grid(row=0, column=1, padx=25)
+label_close.bind("<Button-1>", close_app)
 
 # run reset timer
 reset_timer()
+
+# bind drag and drop feature to the main window
+window.bind("<ButtonPress-1>", start_move)
+window.bind("<ButtonRelease-1>", stop_move)
+window.bind("<B1-Motion>", on_move)
+
 window.mainloop()
