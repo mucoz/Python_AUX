@@ -1,14 +1,16 @@
 import tkinter as tk
+from tkinter import ttk
 import time
 import datetime
 from threading import Thread
-
+import win32api
 
 WINDOW_WIDTH = 200
 WINDOW_HEIGHT = 150
+PROGRESSBAR_THICKNESS = 10
 
 # window
-window = tk. Tk()
+window = tk.Tk()
 window.title("Count Down")
 screen_width = window.winfo_screenwidth()
 screen_height = window.winfo_screenheight()
@@ -26,10 +28,29 @@ class AppState:
     timer_thread = None
     reset_thread = None
     animation_thread = None
+    speed_thread = None
     drag_start_x = None
     drag_start_y = None
+    activity_done = []
+
 
 # functions
+def get_mouse_pos():
+    x, y = win32api.GetCursorPos()
+    return x, y
+
+
+def calculate_speed(last_pos, current_pos, last_time, current_time):
+    distance = ((current_pos[0] - last_pos[0]) ** 2 + (current_pos[1] - last_pos[1]) ** 2) ** 0.5
+    time_difference = current_time - last_time
+    speed = distance / time_difference
+    return speed
+
+
+def normalize_speed(speed, min_speed, max_speed, min_range, max_range):
+    return ((speed - min_speed) / (max_speed - min_speed)) * (max_range - min_range) + min_range
+
+
 def countdown():
     try:
         h = int(text_hour.get())
@@ -42,6 +63,7 @@ def countdown():
     if total_seconds == 0:
         reset_timer()
         return
+    total_seconds_to_be_added = total_seconds
     while total_seconds > 0 and AppState.timer_is_running:
         timer = datetime.timedelta(seconds=total_seconds)
         print(timer, end="\r")
@@ -49,7 +71,7 @@ def countdown():
 
         # Reduces total time by one second
         total_seconds -= 1
-        text_hour.delete(0, tk. END)
+        text_hour.delete(0, tk.END)
         text_minute.delete(0, tk.END)
         text_second.delete(0, tk.END)
         remaining_time = datetime.timedelta(seconds=total_seconds)
@@ -60,11 +82,23 @@ def countdown():
     reset_timer()
     if total_seconds < 1:
         finish_work_screen()
+        AppState.activity_done.append(total_seconds_to_be_added)
+        # update activity progressbar
+        total_time = 0
+        for time_span in AppState.activity_done:
+            total_time += time_span
+            result = (total_time / (8 * 3600)) * 100
+            progressbar_activity["value"] = result
+            if 50 < result <= 90:
+                progressbar_activity["style"] = "blue.Horizontal.TProgressbar"
+            elif result > 90:
+                progressbar_activity["style"] = "red.Horizontal.TProgressbar"
+            else:
+                progressbar_activity["style"] = "green.Horizontal.TProgressbar"
 
 
 def finish_work_screen():
-
-    def exit_end_screen(e):
+    def exit_end_screen(event):
         end_screen.destroy()
 
     end_screen = tk.Tk()
@@ -73,9 +107,9 @@ def finish_work_screen():
     end_screen.attributes("-topmost", True)
     main_frame = tk.Frame(end_screen, bg=black)
     main_frame.pack(pady=window.winfo_screenheight() / 4)
-    label_close = tk.Label(main_frame, text="Work Completed. \n\nPress 'ESC' to continue...",
-                           font=large_font, bg=black, fg=orange)
-    label_close.grid(row=0, column=0)
+    label_message = tk.Label(main_frame, text="Work Completed. \n\nPress 'ESC' to continue...",
+                             font=large_font, bg=black, fg=orange)
+    label_message.grid(row=0, column=0)
     end_screen.bind('<Escape>', exit_end_screen)
     end_screen.mainloop()
 
@@ -92,13 +126,37 @@ def info_animation():
     label_info.configure(text="Ready.")
 
 
+def speed_animation():
+    last_mouse_pos = get_mouse_pos()
+    last_time = time.time()
+    progressbar_speed.start()
+    while AppState.timer_is_running:
+        time.sleep(0.1)
+        current_mouse_pos = get_mouse_pos()
+        current_time = time.time()
+        speed = calculate_speed(last_mouse_pos, current_mouse_pos, last_time, current_time)
+        normalized_speed = normalize_speed(speed, 0, 8000, 0, 100)
+        progressbar_speed["value"] = normalized_speed
+        if 50 < normalized_speed <= 90:
+            progressbar_speed["style"] = "blue.Horizontal.TProgressbar"
+        elif normalized_speed > 90:
+            progressbar_speed["style"] = "red.Horizontal.TProgressbar"
+        else:
+            progressbar_speed["style"] = "green.Horizontal.TProgressbar"
+        last_mouse_pos = current_mouse_pos
+        last_time = current_time
+    progressbar_speed.stop()
+
+
 def start_timer():
     if not AppState.timer_is_running:
         AppState.timer_is_running = True
         AppState.timer_thread = Thread(target=countdown)
         AppState.animation_thread = Thread(target=info_animation)
+        AppState.speed_thread = Thread(target=speed_animation)
         AppState.timer_thread.start()
         AppState.animation_thread.start()
+        AppState.speed_thread.start()
 
 
 def reset_timer():
@@ -144,6 +202,7 @@ def on_move(event):
     y = window.winfo_y() + dy
     window.geometry(f"+{x}+{y}")
 
+
 # fonts and colors
 main_font = ('SimSun', 12)
 large_font = ("Trebuchet MS", 46)
@@ -151,20 +210,32 @@ black = "#010101"
 orange = "#fb7e14"
 window.config(bg=black)
 
+# styles for progressbar
+style = ttk.Style()
+style.theme_use("default")
+style.configure("green.Horizontal.TProgressbar", foreground="green", background="green",
+                thickness=PROGRESSBAR_THICKNESS)
+style.configure("blue.Horizontal.TProgressbar", foreground="blue", background="blue", thickness=PROGRESSBAR_THICKNESS)
+style.configure("red.Horizontal.TProgressbar", foreground="red", background="red", thickness=PROGRESSBAR_THICKNESS)
+
 # window layout
 frame_text = tk.Frame(window, bg=black)
 frame_info = tk.Frame(window, bg=black)
 frame_buttons = tk.Frame(window, bg=black)
+frame_speed = tk.Frame(window, bg=black)
+frame_activity = tk.Frame(window, bg=black)
 frame_settings = tk.Frame(window, bg=black)
-frame_text.pack()
-frame_info.pack()
-frame_buttons.pack()
-frame_settings.pack()
+frame_text.grid(row=0, column=1)
+frame_info.grid(row=1, column=1)
+frame_buttons.grid(row=2, column=1)
+frame_speed.grid(row=0, column=0, rowspan=3, sticky="ns", padx=4)
+frame_activity.grid(row=0, column=2, rowspan=3, sticky="ns", padx=4)
+frame_settings.grid(row=3, columnspan=3, sticky="ew", padx=10)
 
 # timer boxes
-text_hour = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange)
-text_minute = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange)
-text_second = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange)
+text_hour = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange, justify="center")
+text_minute = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange, justify="center")
+text_second = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange, justify="center")
 text_hour.grid(row=0, column=0, padx=5, pady=15)
 text_minute.grid(row=0, column=1, padx=5, pady=15)
 text_second.grid(row=0, column=2, padx=5, pady=15)
@@ -175,18 +246,28 @@ label_info.grid(row=0, column=0)
 
 # work and reset buttons
 button_work = tk.Button(frame_buttons, text="Work", bg=orange, command=start_timer)
-button_work.grid(row=0, column=0, padx=5, pady=10)
+button_work.pack(side=tk.LEFT)
 button_reset = tk.Button(frame_buttons, text="Reset", bg=orange, command=reset_timer)
-button_reset.grid(row=0, column=1, padx=5, pady=10)
+button_reset.pack(side=tk.RIGHT)
+
+# speed progressbar
+progressbar_speed = ttk.Progressbar(frame_speed, orient="vertical", mode="determinate",
+                                    style="green.Horizontal.TProgressbar")
+progressbar_speed.grid(row=0, column=0, rowspan=3, padx=10, pady=10)
+
+# activity progressbar
+progressbar_activity = ttk.Progressbar(frame_activity, orient="vertical", mode="determinate",
+                                       style="green.Horizontal.TProgressbar")
+progressbar_activity.grid(row=0, column=2, padx=10, pady=10)
 
 # always on top checkbox
 checkbox_ontop_value = tk.IntVar()
 checkbox_ontop = tk.Checkbutton(frame_settings, text='On Top', variable=checkbox_ontop_value,
                                 command=toggle_always_on_top, bg=black, fg=orange)
 checkbox_ontop.select()
-checkbox_ontop.grid(row=0, column=0, padx=25)
+checkbox_ontop.pack(side=tk.LEFT)
 label_close = tk.Label(frame_settings, text="Close", bg=black, fg=orange)
-label_close.grid(row=0, column=1, padx=25)
+label_close.pack(side=tk.RIGHT)
 label_close.bind("<Button-1>", close_app)
 
 # run reset timer
