@@ -68,7 +68,6 @@ def countdown():
         timer = datetime.timedelta(seconds=total_seconds)
         print(timer, end="\r")
         time.sleep(1)
-
         # Reduces total time by one second
         total_seconds -= 1
         text_hour.delete(0, tk.END)
@@ -118,7 +117,7 @@ def info_animation():
     chars = ["--", "\\", "|", "/"]
     i = 0
     while AppState.timer_is_running:
-        label_info.configure(text="Working... " + chars[i])
+        label_info.configure(text="Working... " + chars[i] + "  " + str(round(progressbar_activity["value"], 1)) + "%")
         time.sleep(0.1)
         i += 1
         if i == 4:
