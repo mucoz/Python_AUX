@@ -120,7 +120,7 @@ def update_activity_bar():
     label_percentage.configure(text=str(round(progressbar_activity["value"], 1)) + "%")
 
 
-def countdown():
+def count_down():
     try:
         h = int(text_hour.get())
         m = int(text_minute.get())
@@ -204,7 +204,7 @@ def speed_animation():
 def start_timer():
     if not AppState.timer_is_running:
         AppState.timer_is_running = True
-        AppState.timer_thread = Thread(target=countdown)
+        AppState.timer_thread = Thread(target=count_down)
         AppState.animation_thread = Thread(target=info_animation)
         AppState.speed_thread = Thread(target=speed_animation)
         AppState.timer_thread.start()
