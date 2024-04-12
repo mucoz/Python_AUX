@@ -4,11 +4,14 @@ import time
 import datetime
 from threading import Thread
 import win32api
+import sqlite3
+
 
 WINDOW_WIDTH = 200
 WINDOW_HEIGHT = 150
 PROGRESSBAR_THICKNESS = 10
 WORKING_TIME_LIMIT_IN_SECONDS = 8 * 3600
+DB_FILE = "data.db"
 
 # window
 window = tk.Tk()
@@ -32,10 +35,52 @@ class AppState:
     speed_thread = None
     drag_start_x = None
     drag_start_y = None
-    activity_done = []
+    activity_done = 0 # in seconds
 
 
 # functions
+def create_database():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS work (
+                        id INTEGER PRIMARY KEY,
+                        date TEXT,
+                        work_completed INTEGER
+                    )''')
+    conn.commit()
+    conn.close()
+
+
+def get_today_work():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    c.execute("SELECT work_completed FROM work WHERE date=?", (today,))
+    result = c.fetchone()
+    conn.close()
+    if result:
+        print(result[0])
+        return result[0]
+    else:
+        return 0
+
+
+def update_today_work(work_completed):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    c.execute("SELECT * FROM work WHERE date=?", (today,))
+    result = c.fetchone()
+    if result:
+        # Update existing entry
+        c.execute("UPDATE work SET work_completed=? WHERE date=?", (work_completed, today))
+    else:
+        # Insert new entry
+        c.execute("INSERT INTO work (date, work_completed) VALUES (?, ?)", (today, work_completed))
+    conn.commit()
+    conn.close()
+
+
 def get_mouse_pos():
     x, y = win32api.GetCursorPos()
     return x, y
@@ -63,17 +108,16 @@ def update_timer(remaining_time):
 
 def update_activity_bar():
     # update activity progressbar
-    total_time = 0
-    for time_span in AppState.activity_done:
-        total_time += time_span
-        result = (total_time / WORKING_TIME_LIMIT_IN_SECONDS) * 100
-        progressbar_activity["value"] = result
-        if 50 < result <= 90:
-            progressbar_activity["style"] = "blue.Horizontal.TProgressbar"
-        elif result > 90:
-            progressbar_activity["style"] = "red.Horizontal.TProgressbar"
-        else:
-            progressbar_activity["style"] = "green.Horizontal.TProgressbar"
+    result = (AppState.activity_done / WORKING_TIME_LIMIT_IN_SECONDS) * 100
+    progressbar_activity["value"] = result
+    if 50 < result <= 90:
+        progressbar_activity["style"] = "blue.Horizontal.TProgressbar"
+    elif result > 90:
+        progressbar_activity["style"] = "red.Horizontal.TProgressbar"
+    else:
+        progressbar_activity["style"] = "green.Horizontal.TProgressbar"
+    # update percentage label
+    label_percentage.configure(text=str(round(progressbar_activity["value"], 1)) + "%")
 
 
 def countdown():
@@ -88,7 +132,6 @@ def countdown():
     if total_seconds == 0:
         reset_timer()
         return
-    total_seconds_to_be_added = total_seconds
     while total_seconds > 0 and AppState.timer_is_running:
         timer = datetime.timedelta(seconds=total_seconds)
         print(timer, end="\r")
@@ -96,13 +139,15 @@ def countdown():
         # Reduces total time by one second
         total_seconds -= 1
         remaining_time = datetime.timedelta(seconds=total_seconds)
-        update_timer(remaining_time)
-
+        if AppState.timer_is_running:
+            update_timer(remaining_time)
+            AppState.activity_done += 1
+            update_activity_bar()
     reset_timer()
+    update_today_work(AppState.activity_done)
     if total_seconds < 1:
+        # if finished completely (without reset), show break screen
         finish_work_screen()
-        AppState.activity_done.append(total_seconds_to_be_added)
-        update_activity_bar()
 
 
 def finish_work_screen():
@@ -126,7 +171,7 @@ def info_animation():
     chars = ["--", "\\", "|", "/"]
     i = 0
     while AppState.timer_is_running:
-        label_info.configure(text="Working... " + chars[i] + "  " + str(round(progressbar_activity["value"], 1)) + "%")
+        label_info.configure(text="Working... " + chars[i])
         time.sleep(0.1)
         i += 1
         if i == 4:
@@ -227,36 +272,37 @@ style.configure("blue.Horizontal.TProgressbar", foreground="blue", background="b
 style.configure("red.Horizontal.TProgressbar", foreground="red", background="red", thickness=PROGRESSBAR_THICKNESS)
 
 # window layout
-frame_text = tk.Frame(window, bg=black)
+frame_countdown = tk.Frame(window, bg=black)
 frame_info = tk.Frame(window, bg=black)
 frame_buttons = tk.Frame(window, bg=black)
 frame_speed = tk.Frame(window, bg=black)
 frame_activity = tk.Frame(window, bg=black)
 frame_settings = tk.Frame(window, bg=black)
-frame_text.grid(row=0, column=1)
+frame_countdown.grid(row=0, column=1, pady=10)
 frame_info.grid(row=1, column=1)
-frame_buttons.grid(row=2, column=1)
+frame_buttons.grid(row=2, column=1, pady=5)
 frame_speed.grid(row=0, column=0, rowspan=3, sticky="ns", padx=4)
 frame_activity.grid(row=0, column=2, rowspan=3, sticky="ns", padx=4)
 frame_settings.grid(row=3, columnspan=3, sticky="ew", padx=10)
 
 # timer boxes
-text_hour = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange, justify="center")
-text_minute = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange, justify="center")
-text_second = tk.Entry(frame_text, width=3, font=main_font, bg=black, fg=orange, justify="center")
-text_hour.grid(row=0, column=0, padx=5, pady=15)
-text_minute.grid(row=0, column=1, padx=5, pady=15)
-text_second.grid(row=0, column=2, padx=5, pady=15)
+text_hour = tk.Entry(frame_countdown, width=3, font=main_font, bg=black, fg=orange, justify="center")
+text_minute = tk.Entry(frame_countdown, width=3, font=main_font, bg=black, fg=orange, justify="center")
+text_second = tk.Entry(frame_countdown, width=3, font=main_font, bg=black, fg=orange, justify="center")
+text_hour.grid(row=0, column=0, padx=5)
+text_minute.grid(row=0, column=1, padx=5)
+text_second.grid(row=0, column=2, padx=5)
 
 # info label
 label_info = tk.Label(frame_info, text="Ready.", bg=black, fg=orange)
 label_info.grid(row=0, column=0)
-
+label_percentage = tk.Label(frame_info, text="0.0%", bg=black, fg=orange)
+label_percentage.grid(row=1, column=0)
 # work and reset buttons
 button_work = tk.Button(frame_buttons, text="Work", bg=orange, command=start_timer)
-button_work.pack(side=tk.LEFT)
+button_work.grid(row=0, column=0, padx=(0, 5))
 button_reset = tk.Button(frame_buttons, text="Reset", bg=orange, command=reset_timer)
-button_reset.pack(side=tk.RIGHT)
+button_reset.grid(row=0, column=1, padx=(5, 0))
 
 # speed progressbar
 progressbar_speed = ttk.Progressbar(frame_speed, orient="vertical", mode="determinate",
@@ -274,6 +320,8 @@ checkbox_ontop = tk.Checkbutton(frame_settings, text='On Top', variable=checkbox
                                 command=toggle_always_on_top, bg=black, fg=orange)
 checkbox_ontop.select()
 checkbox_ontop.pack(side=tk.LEFT)
+
+# close button
 label_close = tk.Label(frame_settings, text="Close", bg=black, fg=orange)
 label_close.pack(side=tk.RIGHT)
 label_close.bind("<Button-1>", close_app)
@@ -285,5 +333,13 @@ reset_timer()
 window.bind("<ButtonPress-1>", start_move)
 window.bind("<ButtonRelease-1>", stop_move)
 window.bind("<B1-Motion>", on_move)
+
+# create database
+create_database()
+# get today's work
+work_completed_today = get_today_work()
+AppState.activity_done = work_completed_today
+# update activity progressbar
+update_activity_bar()
 
 window.mainloop()
