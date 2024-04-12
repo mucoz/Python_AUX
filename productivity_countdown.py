@@ -8,6 +8,7 @@ import win32api
 WINDOW_WIDTH = 200
 WINDOW_HEIGHT = 150
 PROGRESSBAR_THICKNESS = 10
+WORKING_TIME_LIMIT_IN_SECONDS = 8 * 3600
 
 # window
 window = tk.Tk()
@@ -51,6 +52,30 @@ def normalize_speed(speed, min_speed, max_speed, min_range, max_range):
     return ((speed - min_speed) / (max_speed - min_speed)) * (max_range - min_range) + min_range
 
 
+def update_timer(remaining_time):
+    text_hour.delete(0, tk.END)
+    text_minute.delete(0, tk.END)
+    text_second.delete(0, tk.END)
+    text_hour.insert(0, str(remaining_time).split(":")[0])
+    text_minute.insert(0, str(remaining_time).split(":")[1])
+    text_second.insert(0, str(remaining_time).split(":")[2])
+
+
+def update_activity_bar():
+    # update activity progressbar
+    total_time = 0
+    for time_span in AppState.activity_done:
+        total_time += time_span
+        result = (total_time / WORKING_TIME_LIMIT_IN_SECONDS) * 100
+        progressbar_activity["value"] = result
+        if 50 < result <= 90:
+            progressbar_activity["style"] = "blue.Horizontal.TProgressbar"
+        elif result > 90:
+            progressbar_activity["style"] = "red.Horizontal.TProgressbar"
+        else:
+            progressbar_activity["style"] = "green.Horizontal.TProgressbar"
+
+
 def countdown():
     try:
         h = int(text_hour.get())
@@ -70,30 +95,14 @@ def countdown():
         time.sleep(1)
         # Reduces total time by one second
         total_seconds -= 1
-        text_hour.delete(0, tk.END)
-        text_minute.delete(0, tk.END)
-        text_second.delete(0, tk.END)
         remaining_time = datetime.timedelta(seconds=total_seconds)
-        text_hour.insert(0, str(remaining_time).split(":")[0])
-        text_minute.insert(0, str(remaining_time).split(":")[1])
-        text_second.insert(0, str(remaining_time).split(":")[2])
+        update_timer(remaining_time)
 
     reset_timer()
     if total_seconds < 1:
         finish_work_screen()
         AppState.activity_done.append(total_seconds_to_be_added)
-        # update activity progressbar
-        total_time = 0
-        for time_span in AppState.activity_done:
-            total_time += time_span
-            result = (total_time / (8 * 3600)) * 100
-            progressbar_activity["value"] = result
-            if 50 < result <= 90:
-                progressbar_activity["style"] = "blue.Horizontal.TProgressbar"
-            elif result > 90:
-                progressbar_activity["style"] = "red.Horizontal.TProgressbar"
-            else:
-                progressbar_activity["style"] = "green.Horizontal.TProgressbar"
+        update_activity_bar()
 
 
 def finish_work_screen():
