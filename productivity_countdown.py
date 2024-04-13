@@ -6,6 +6,7 @@ from threading import Thread
 import win32api
 import sqlite3
 
+# TODO : try to add keyboard strokes to speed progressbar
 
 WINDOW_WIDTH = 200
 WINDOW_HEIGHT = 150
@@ -30,7 +31,6 @@ window.overrideredirect(True)
 class AppState:
     timer_is_running = False
     timer_thread = None
-    reset_thread = None
     animation_thread = None
     speed_thread = None
     drag_start_x = None
@@ -138,16 +138,21 @@ def count_down():
         time.sleep(1)
         # Reduces total time by one second
         total_seconds -= 1
+        print("1 saniye gitti")
         remaining_time = datetime.timedelta(seconds=total_seconds)
         if AppState.timer_is_running:
             update_timer(remaining_time)
             AppState.activity_done += 1
             update_activity_bar()
+    print("count_down bitiyor...")
     reset_timer()
+    print("reset_timer calisti.")
     update_today_work(AppState.activity_done)
+    print("work updated.")
     if total_seconds < 1:
         # if finished completely (without reset), show break screen
         finish_work_screen()
+    print("can be closed safely = True")
 
 
 def finish_work_screen():
@@ -204,6 +209,9 @@ def speed_animation():
 def start_timer():
     if not AppState.timer_is_running:
         AppState.timer_is_running = True
+        AppState.timer_thread = None
+        AppState.animation_thread = None
+        AppState.speed_thread = None
         AppState.timer_thread = Thread(target=count_down)
         AppState.animation_thread = Thread(target=info_animation)
         AppState.speed_thread = Thread(target=speed_animation)
@@ -214,10 +222,6 @@ def start_timer():
 
 def reset_timer():
     AppState.timer_is_running = False
-    if AppState.timer_thread:
-        AppState.timer_thread = None
-    if AppState.animation_thread:
-        AppState.animation_thread = None
     text_hour.delete(0, tk.END)
     text_hour.insert(0, "0")
     text_minute.delete(0, tk.END)
@@ -225,10 +229,24 @@ def reset_timer():
     text_second.delete(0, tk.END)
     text_second.insert(0, "0")
     label_info.configure(text="Ready.")
+    if AppState.timer_thread:
+        AppState.timer_thread = None
+    if AppState.animation_thread:
+        AppState.animation_thread = None
+    if AppState.speed_thread:
+        AppState.speed_thread = None
 
 
-def close_app(event):
-    window.destroy()
+
+def close_app(e):
+    if AppState.timer_is_running:
+        reset_timer()
+        update_today_work(AppState.activity_done)
+    try:
+        print("window yok ediliyor...")
+        window.destroy()
+    except Exception as e:
+        print("Zorla kapatildi.")
 
 
 def toggle_always_on_top():
@@ -324,7 +342,7 @@ checkbox_ontop.pack(side=tk.LEFT)
 # close button
 label_close = tk.Label(frame_settings, text="Close", bg=black, fg=orange)
 label_close.pack(side=tk.RIGHT)
-label_close.bind("<Button-1>", close_app)
+label_close.bind("<Button-1>", lambda event: close_app(event)) #lambda event: Thread(target=close_app, args=(event, )).start()
 
 # run reset timer
 reset_timer()
