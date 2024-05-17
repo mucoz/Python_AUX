@@ -14,6 +14,7 @@ strScriptPath = objFSO.GetParentFolderName(WScript.ScriptFullName)
 strReqFilePath = strScriptPath & "\requirements.txt"
 strRunRobotFilePath = strScriptPath & "\Launcher.bat"
 strInstallerFilePath = strScriptPath & "\Installer.bat"
+strPythonMainFilePath = strScriptPath & "\main.py"
 
 ' Check if requirements.txt exists
 If Not objFSO.FileExists(strReqFilePath) Then
@@ -68,15 +69,21 @@ Else
 End If
 
 ' Generate content for RunRobot.bat file
-strRunRobotContent = "@echo off" & vbCrLf & _
-                     "echo Running Application..." & vbCrLf & _
-                     "python main.py" ' Adjust as needed
+strRunRobotContent = "CALL C:\Programs\Miniconda3_x64\Scripts\activate.bat" & vbCrLf & _
+                     "CALL conda activate ""%~dp0app_env""" & vbCrLf & _
+                     "cmd /k CALL python main.py" ' Adjust as needed
 
 ' Generate content for Installer.bat file
-strInstallerContent = "@echo off" & vbCrLf & _
-                      "echo Installing dependencies..." & vbCrLf & _
-                      "pip install -r requirements.txt"  & vbCrLf & _
+strInstallerContent = "CALL C:\Programs\Miniconda3_x64\Scripts\activate.bat" & vbCrLf & _
+                      "set ENV_NAME=app_env" & vbCrLf & _
+                      "set FOLDER_PATH=%~dp0"  & vbCrLf & _
+		      "CALL conda create -y -p ""%FOLDER_PATH%%ENV_NAME%"" python=3.7"  & vbCrLf & _
+		      "CALL conda activate ""%FOLDER_PATH%%ENV_NAME%"""  & vbCrLf & _
+		      "pip install -r ""%FOLDER_PATH%requirements.txt"""  & vbCrLf & _
 		      "DEL *.vbs"
+		      "cmd /k echo Environment created and libraries installed successfully."
+
+strPythonMainContent = "print('TEST')"
 
 ' Create RunRobot.bat file
 Set objFile = objFSO.CreateTextFile(strRunRobotFilePath)
@@ -86,6 +93,11 @@ objFile.Close
 ' Create Installer.bat file
 Set objFile = objFSO.CreateTextFile(strInstallerFilePath)
 objFile.Write strInstallerContent
+objFile.Close
+
+' Create main.py file
+Set objFile = objFSO.CreateTextFile(strPythonMainFilePath)
+objFile.Write strPythonMainContent
 objFile.Close
 
 WScript.Echo "RunRobot.bat and Installer.bat files generated successfully."
