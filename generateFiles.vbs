@@ -56,6 +56,7 @@ Else
             End If
         Else
 	WScript.Echo "Warning: All libraries in requirements.txt must have versions!"
+	WScript.Quit
                allLibrariesFound = False
         End If
     Next
@@ -74,7 +75,8 @@ strRunRobotContent = "@echo off" & vbCrLf & _
 ' Generate content for Installer.bat file
 strInstallerContent = "@echo off" & vbCrLf & _
                       "echo Installing dependencies..." & vbCrLf & _
-                      "pip install -r requirements.txt" ' Adjust as needed
+                      "pip install -r requirements.txt"  & vbCrLf & _
+		      "DEL *.vbs"
 
 ' Create RunRobot.bat file
 Set objFile = objFSO.CreateTextFile(strRunRobotFilePath)
